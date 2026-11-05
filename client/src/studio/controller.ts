@@ -1,6 +1,7 @@
 import { IndexeddbPersistence } from 'y-indexeddb'
 import { Awareness } from 'y-protocols/awareness'
 import * as Y from 'yjs'
+import { renderDemo, type DemoStem } from '../audio/demo'
 import { ArrangementEngine } from '../audio/engine'
 import { SharedClock, sharedToAudioTime } from '../audio/clock'
 import { computePeaks, type Peaks } from '../audio/peaks'
@@ -792,6 +793,54 @@ export class StudioController {
     this.emit()
   }
 
+  private async seedDemo() {
+    if (this.destroyed || this.seeded || !this.isHost) return
+    if (readTracks(this.doc).length > 0) {
+      this.seeded = true
+      return
+    }
+    this.seeded = true
+    try {
+      const prepared: Array<DemoStem & { sha256: string; durationSec: number }> = []
+      for (const stem of renderDemo()) {
+        const sha256 = await sha256Hex(stem.wav)
+        const audio = await this.decode(stem.wav)
+        await this.bytes.put(sha256, stem.wav)
+        this.rememberBuffer(sha256, audio)
+        prepared.push({ ...stem, sha256, durationSec: audio.duration })
+      }
+      if (this.destroyed || readTracks(this.doc).length > 0) return
+      this.doc.transact(() => {
+        if (tracksOf(this.doc).length > 0) return
+        for (const stem of prepared) {
+          const trackId = crypto.randomUUID()
+          const assetId = crypto.randomUUID()
+          tracksOf(this.doc).push([{ id: trackId, name: stem.name, volume: stem.volume, mute: false }])
+          putAsset(this.doc, {
+            id: assetId,
+            name: `${stem.name}.wav`,
+            durationSec: stem.durationSec,
+            mime: 'audio/wav',
+            byteLength: stem.wav.byteLength,
+            sha256: stem.sha256,
+          })
+          upsertClip(this.doc, {
+            id: crypto.randomUUID(),
+            trackId,
+            assetId,
+            startSec: 0,
+            offsetSec: 0,
+            durationSec: stem.durationSec,
+          })
+        }
+      })
+      this.setBanner('Demo loop is on the timeline. Press space to play it.')
+    } catch (error) {
+      console.error(error)
+      if (!this.destroyed && readTracks(this.doc).length === 0) seedDefaultTracks(this.doc)
+    }
+  }
+
   private sendPing() {
     if (this.destroyed) return
     if (this.session.leaderId === this.clientId) return
@@ -810,9 +859,7 @@ export class StudioController {
     window.clearTimeout(this.seedTimer)
     const delay = this.peers.length > 0 ? 2000 : 250
     this.seedTimer = window.setTimeout(() => {
-      if (this.destroyed || this.seeded) return
-      if (readTracks(this.doc).length === 0) seedDefaultTracks(this.doc)
-      this.seeded = true
+      void this.seedDemo()
     }, delay)
   }
 

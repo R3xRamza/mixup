@@ -17,7 +17,7 @@ Open http://localhost:5173 in two browsers, or two profiles. Create a room in on
 
 Use headphones. Speakers feed the arrangement and the other person’s voice back into the mic.
 
-Import wav, mp3, ogg, flac, or m4a up to 30 MB. Reloading the page restores that room’s arrangement and audio from this browser.
+A new room starts with a short original demo: drums, bass, keys, and lead. Press space to hear it. Import wav, mp3, ogg, flac, or m4a up to 30 MB to replace or add to it. Reloading the page restores that room’s arrangement and audio from this browser.
 
 ## Keyboard
 
